@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\MessagesController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\WorkshopsController;
 use App\Http\Controllers\Api\ChallengesController;
+use App\Http\Controllers\Api\ShopController;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
@@ -28,7 +29,7 @@ Route::middleware('auth:sanctum')->post('/user/update', [ProfileController::clas
 Route::middleware('auth:sanctum')->get('/projects', [ProjectsController::class, 'index']);
 Route::middleware('auth:sanctum')->post('/projects/create', [ProjectsController::class, 'create']);
 Route::middleware('auth:sanctum')->post('/projects/update', [ProjectsController::class, 'update']);
-Route::middleware('auth:sanctum')->post('/projects/destroy', [ProjectsController::class, 'destroy']);
+Route::middleware('auth:sanctum')->delete('/projects/{id}', [ProjectsController::class, 'destroy']);
 Route::middleware('auth:sanctum')->get('/projects/team', [ProjectsController::class, 'ShowAllTeam']);
 Route::middleware('auth:sanctum')->post('/projects/invite', [ProjectsController::class, 'inviteMember']);
 Route::middleware('auth:sanctum')->post('/projects/accept', [ProjectsController::class, 'accept']);
@@ -36,7 +37,7 @@ Route::middleware('auth:sanctum')->post('/projects/reject', [ProjectsController:
 Route::middleware('auth:sanctum')->post('/projects/DeleteMemeber', [ProjectsController::class, 'DeleteMemeber']);
 Route::middleware('auth:sanctum')->post('/projects/RequirmentofTheProject', [ProjectsController::class, 'CreateRequirmentofTheProject']);
 Route::middleware('auth:sanctum')->get('/projects/edit', [ProjectsController::class, 'edit']);
-Route::middleware('auth:sanctum')->get('/projects/{id}', [ProjectsController::class, 'show']);
+Route::get('/mentors/list', [App\Http\Controllers\Api\MentorshipsController::class, 'getAllMentors']);
 Route::middleware('auth:sanctum')->get('/mentorships', [MentorshipsController::class, 'index']);
 Route::middleware('auth:sanctum')->post('/mentorships/searchmentorbyskills', [MentorshipsController::class, 'searchmentorbyskills']);
 Route::middleware('auth:sanctum')->post('/mentorships/store', [MentorshipsController::class, 'store']);
@@ -71,7 +72,7 @@ Route::middleware('auth:sanctum')->post('/workshops', [WorkshopsController::clas
 Route::middleware('auth:sanctum')->post('/workshops/show/{id}', [WorkshopsController::class, 'show']);
 Route::middleware('auth:sanctum')->post('/workshops/store', [WorkshopsController::class, 'store']);
 Route::middleware('auth:sanctum')->post('/workshops/search', [WorkshopsController::class, 'search']);
-Route::middleware('auth:sanctum')->post('/workshops/entroll/{id}', [WorkshopsController::class, 'Entroll']);
+Route::middleware('auth:sanctum')->post('/workshops/enroll/{id}', [WorkshopsController::class, 'enroll']);
 Route::middleware('auth:sanctum')->post('/workshops/progress', [WorkshopsController::class, 'Progress']);
 Route::middleware('auth:sanctum')->post('/challenges', [ChallengesController::class, 'index']);
 Route::middleware('auth:sanctum')->post('/challenges/store', [ChallengesController::class, 'store']);
@@ -79,6 +80,17 @@ Route::middleware('auth:sanctum')->post('/challenges/submit/{id}', [ChallengesCo
 Route::middleware('auth:sanctum')->post('/challenges/accept/{id}', [ChallengesController::class, 'accept']);
 Route::middleware('auth:sanctum')->post('/challenges/reject/{id}', [ChallengesController::class, 'reject']);
 Route::middleware('auth:sanctum')->post('/challenges/Review/{id}', [ChallengesController::class, 'Review']);
+Route::get('/shop/products', [App\Http\Controllers\Api\ShopController::class, 'index']);
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/shop/products', [App\Http\Controllers\Api\ShopController::class, 'store']);
+});
+Route::middleware('auth:sanctum')->post('/projects/request-join', [ProjectsController::class, 'requestJoin']);
+Route::middleware('auth:sanctum')->post('/projects/handle-request', [ProjectsController::class, 'handleJoinRequest']);
+Route::middleware('auth:sanctum')->get('/projects/invitations', [ProjectsController::class, 'myInvitations']);
+Route::middleware('auth:sanctum')->get('/projects/join-requests', [ProjectsController::class, 'getJoinRequests']);
+Route::get('/investments/my-proposals', [InvestmentsController::class, 'myProposals']);
+Route::middleware('auth:sanctum')->post('/messages/conversation', [MessagesController::class, 'getConversation']);
+Route::middleware('auth:sanctum')->get('/projects/{id}', [ProjectsController::class, 'show']);
 
 
 
