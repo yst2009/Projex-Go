@@ -13,81 +13,115 @@ use App\Notifications\NewTeamJoinRequest;
 class ProjectsController extends Controller
 {
     public function index()
-    {
-        $projects = Project::all();
-        return response()->json(['projects' => $projects], 200);
+{
+    $userProfileId = \App\Models\Profile::where('user_id', auth()->id())->value('id');
+
+    if (!$userProfileId) {
+        return response()->json(['projects' => []], 200);
     }
+
+    $projectIds = \App\Models\TeamMember::where('user_profile_id', $userProfileId)
+                                        ->where('status', 'active')
+                                        ->pluck('project_id');
+
+    $projects = Project::whereIn('id', $projectIds)->get();
+    
+    return response()->json(['projects' => $projects], 200);
+}
     
     public function create(Request $request)
     {
-      
-        $project = new Project();
-        $project->title=$request->title;
-        $project->description=$request->description;
-        $project->category=$request->category;
-        $project->stage=$request->stage;
-        $project->status=$request->status;
-        $project->user_profile_id=$request->user_profile_id;
-        $project->budget_needed=$request->budget_needed;
-        $project->current_budget=$request->current_budget;
-        $project->progress_percentage=$request->progress_percentage;
-        $project->start_date=$request->start_date;
-        $project->deadline=$request->deadline;
-        $project->documentation_url=$request->documentation_url;
-        $project->save();
-        $team=new TeamMember();
-        $team->project_id=$project->id;
-        $team->user_profile_id=$project->user_profile_id;
-        $team->status='active';
-        $team->role='Leader';
+        $user = auth()->user();
+        $profile = \App\Models\Profile::where('user_id', $user->id)->first();
+
+        if (!$profile) {
+            return response()->json(['message' => 'يجب عليك استكمال الملف الشخصي أولاً'], 400);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'category' => 'required|string',
+            'stage' => 'required|string',
+            'budget_needed' => 'nullable|numeric',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('projects', 'public');
+            $imagePath = '/storage/' . $path;
+        }
+
+        $project = \App\Models\Project::create([
+            'title' => $validated['title'],
+            'description' => $validated['description'],
+            'category' => $validated['category'],
+            'stage' => $validated['stage'],
+            'image' => $imagePath, 
+            'status' => 'active',
+            'user_profile_id' => $profile->id,
+            'budget_needed' => $request->budget_needed ?? 0,
+            'current_budget' => 0,
+            'progress_percentage' => 0,
+            'start_date' => now(),
+            'deadline' => now()->addMonths(6),
+        ]);
+
+        $team = new \App\Models\TeamMember();
+        $team->project_id = $project->id;
+        $team->user_profile_id = $profile->id;
+        $team->status = 'active';
+        $team->role = 'Leader';
         $team->save();
-        return response()->json(['message' => 'Project created successfully'], 200);
+
+        return response()->json([
+            'message' => 'تم إنشاء المشروع بنجاح',
+            'project' => $project
+        ], 201);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
+    
     public function store(Request $request)
     {
         //
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show($id)
+
+        public function show($id)
     {
-        $profile=Profile::where('user_id',auth()->user()->id)->first();
-        $project=Project::where('id',$id)->where('user_profile_id',$profile->id)->first();
+        $project = Project::find($id);
         if (!$project) {
             return response()->json(['message' => 'Project not found'], 404);
         }
-        $project_requirements=$project->requirements()->get();
-        $project_requirements->makeHidden(['created_at', 'updated_at', 'project_id','id']);
 
-        $project->makeHidden(['created_at', 'updated_at', 'user_profile_id','id']);
+        $project_requirements = $project->requirements()->get();
+        $project_requirements->makeHidden(['created_at', 'updated_at', 'project_id', 'id']);
 
-        $teamMembers = $project->teamMembers()->get()->map(function ($member) {
-        return [
-            'Name' => $member->profile->user->name ?? 'Unknown',         
-            'role' => $member->role,
-            'status' => $member->status
-        ];
-    });
+        $teamMembers = $project->teamMembers()->with('profile.user')->get()->map(function ($member) {
+            return [
+                'id' => $member->id,
+                'Name' => $member->profile->user->name ?? 'Unknown',
+                'email' => $member->profile->user->email ?? 'Unknown',
+                'image' => $member->profile->image ?? null,
+                'role' => $member->role,
+                'status' => $member->status
+            ];
+        });
 
-        return response()->json(['project' => $project,'requirements'=>$project_requirements,'teamMembers'=>$teamMembers], 200);
+        return response()->json([
+            'project' => $project,
+            'requirements' => $project_requirements,
+            'teamMembers' => $teamMembers
+        ], 200);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
+
     public function edit(Request $request)
     {
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
+  
     public function update(Request $request)
     {
         $project = Project::where('id', $request->id)->where('user_id', auth()->id())->first();
@@ -110,19 +144,24 @@ class ProjectsController extends Controller
         return response()->json(['message' => 'Project updated successfully','project' => $project], 200);
     }
 
-    public function destroy()
-    {
-        $user_id=auth()->id();
-        $profile=Profile::where('user_id', $user_id)->first();
-        $project = Project::where('user_profile_id', $profile->id)->first();
-        if (!$project) {
-            return response()->json(['message' => 'Project not found'], 404);
-        }
-        $project->delete();
-        $teamleader=TeamMember::where('project_id', $project->id)->where('status', 'active')->where('role', "leader")->first();
-        $teamleader->delete();
-        return response()->json(['message' => 'Project deleted  successfully'], 200);
+public function destroy($id) 
+{
+    $userProfileId = \App\Models\Profile::where('user_id', auth()->id())->value('id');
+
+    $project = Project::where('id', $id)
+                      ->where('user_profile_id', $userProfileId)
+                      ->first();
+
+    if (!$project) {
+        return response()->json(['message' => 'Project not found or you are not the owner'], 404);
     }
+
+    \App\Models\TeamMember::where('project_id', $id)->delete();
+    $project->delete();
+
+    return response()->json(['message' => 'Project deleted successfully'], 200);
+}
+
 
     public function ShowAllTeam()
     {
@@ -145,7 +184,7 @@ class ProjectsController extends Controller
         return response()->json(['team' => $TeamMembers], 200); 
     }
 
-    public function inviteMember(Request $request)
+  public function inviteMember(Request $request)
     {
         $request->validate([
             'email' => 'required|email',
@@ -191,42 +230,165 @@ class ProjectsController extends Controller
         $notification = new NewTeamJoinRequest($project, $userToInvite);
         $userToInvite->notify($notification);
         return response()->json(['message' => 'User invited successfully'], 200);
-    }
-    public function accept()
+    }        
+
+    public function requestJoin(Request $request)
     {
-        $email=auth()->user()->email;
-        $userinvited=User::where('email', $email)->first();
-        $userProfile =Profile::where('user_id', $userinvited->id)->first();
-        if(!$userProfile){
-            return response()->json(['message' => 'User profile not found'], 404);
+
+        $userProfile = Profile::where('user_id', $request->user()->id)->first();
+        if (!$userProfile) return response()->json(['message' => 'Profile not found'], 404);
+
+        $project = Project::find($request->project_id);
+        if (!$project) return response()->json(['message' => 'not Project found'], 404);
+
+        $existingMember = TeamMember::where('project_id', $project->id)
+            ->where('user_profile_id', $userProfile->id)->first();
+            
+        if ($existingMember) {
+            return response()->json(['message' => 'لقد قمت بإرسال طلب بالفعل أو أنك عضو'], 400);
         }
-        $team=TeamMember::where('user_profile_id', $userProfile->id)->where('status', 'pending')->first();
-        if (!$team) {
-            return response()->json(['message' => 'No pending invitation found'], 404);
-        }
-        $team->status='active';
+
+        $team = new TeamMember();
+        $team->project_id = $project->id;
+        $team->user_profile_id = $userProfile->id;
+        $team->status = 'pending';
+        $team->role = $request->role;
+        $team->type = 'request'; 
         $team->save();
-        return response()->json(['message' => 'User accepted successfully'], 200);
+
+        $projectOwner = User::find($project->profile->user_id);
+        if($projectOwner) {
+           $projectOwner->notify(new \App\Notifications\NewTeamJoinRequest($project, $request->user()));
+        }
+
+        return response()->json(['message' => 'تم إرسال طلب الانضمام بنجاح'], 200);
     }
-    public function reject()
+
+public function myInvitations(Request $request)
+{
+    $profile = Profile::where('user_id', auth()->id())->first();
+    if (!$profile) {
+        return response()->json(['message' => 'Profile not found'], 404);
+    }
+
+    // ✅ تأكد إن الـ user هو Leader من جدول team_members
+    $leaderMembership = TeamMember::where('user_profile_id', $profile->id)
+        ->where('role', 'Leader')
+        ->where('status', 'active')
+        ->first();
+// return response()->json([
+//     'profile_id' => $profile->id,
+//     'leader' => $leaderMembership,
+// ]);
+    if (!$leaderMembership) {
+        return response()->json(['message' => 'You are not a leader of any project'], 404);
+    }
+
+    $projectId = $leaderMembership->project_id;
+
+    // الـ invitations اللي أنت بعتها ولسه pending
+    $invitations = TeamMember::with(['profile.user'])
+        ->where('project_id', $projectId)
+        ->where('status', 'pending')
+        ->where('type', 'invite')
+        ->get()
+        ->map(function ($inv) {
+            return [
+                'id'             => $inv->id,
+                'user_name'      => $inv->profile->user->name ?? 'Unknown',
+                'requested_role' => $inv->role,
+            ];
+        });
+
+    // الـ requests اللي ناس طلبت تنضم
+    
+
+    return response()->json([
+        'invitations' => $invitations,
+    ], 200);
+}   
+public function getJoinRequests(){
+    $profile = Profile::where('user_id', auth()->id())->first();
+    if (!$profile) {
+        return response()->json(['message' => 'Profile not found'], 404);
+    }
+    $leaderMembership = TeamMember::where('user_profile_id', $profile->id)
+        ->where('role', 'Leader')
+        ->where('status', 'active')
+        ->first();
+    if (!$leaderMembership) {
+        return response()->json(['message' => 'You are not a leader of any project'], 404);
+    }
+
+    $projectId = $leaderMembership->project_id;
+
+    $requests = TeamMember::with(['profile.user'])
+        ->where('project_id', $projectId)
+        ->where('status', 'pending')
+        ->where('type', 'request')
+        ->get()
+        ->map(function ($req) {
+            return [
+                'id'             => $req->id,
+                'user_name'      => $req->profile->user->name ?? 'Unknown',
+                'requested_role' => $req->role,
+            ];
+        });
+
+    return response()->json([
+        'requests'    => $requests,
+    ], 200);
+}
+    public function accept(Request $request)
     {
-        $email=auth()->user()->email;
-        $userinvited=User::where('email', $email)->first();
-        $userProfile =Profile::where('user_id', $userinvited->id)->first();
+        $request->validate(['project_id' => 'required']); 
+        
+        $userProfile = Profile::where('user_id',$request->user())->first();
         if(!$userProfile){
             return response()->json(['message' => 'User profile not found'], 404);
         }
-        $team=TeamMember::where('user_profile_id', $userProfile->id)->where('status', 'pending')->first();
+
+        $team = TeamMember::where('user_profile_id', $userProfile->id)
+                          ->where('project_id', $request->project_id)
+                          ->where('status', 'pending')->first();
+
+        if (!$team) {
+            return response()->json(['message' => 'No pending invitation found for this project'], 404);
+        }
+
+        $team->status = 'active';
+        $team->save();
+
+        return response()->json(['message' => 'تم قبول الدعوة بنجاح!'], 200);
+    }
+
+    public function reject(Request $request)
+    {
+        $request->validate(['project_id' => 'required']);
+        
+        $userProfile = Profile::where('user_id', $request->user())->first();
+        if(!$userProfile){
+            return response()->json(['message' => 'User profile not found'], 404);
+        }
+
+        $team = TeamMember::where('user_profile_id', $userProfile->id)
+                          ->where('project_id', $request->project_id)
+                          ->where('status', 'pending')->first();
+
          if (!$team) {
             return response()->json(['message' => 'No pending invitation found'], 404);
         }
-        $team->status='rejected';
-        $team->delete();
-        return response()->json(['message' => 'User rejected successfully'], 200);
+
+        $team->delete(); 
+
+        return response()->json(['message' => 'تم رفض الدعوة'], 200);
     }
+
+        
+
     public function DeleteMemeber(Request $request){
         $Memeber_id=$request->id;
-        $id=auth()->user()->id;
+        $id=$request->user()->id;
         $userinvited=User::where('id', $id)->first();
         $userProfile =Profile::where('user_id', $userinvited->id)->first();
         if(!$userProfile){
@@ -249,7 +411,7 @@ class ProjectsController extends Controller
     }
     public function CreateRequirmentofTheProject(Request $request)
     {
-        $user_id=auth()->user()->id;
+        $user_id=$request->user()->id;
         $profile=Profile::where('user_id',$user_id)->first();
         if (!$profile) {
             return response()->json(['message' => 'Profile not found'], 404);
