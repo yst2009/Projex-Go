@@ -124,7 +124,8 @@ class ProjectsController extends Controller
   
     public function update(Request $request)
     {
-        $project = Project::where('id', $request->id)->where('user_id', auth()->id())->first();
+        $userProfileId = \App\Models\Profile::where('user_id', auth()->id())->value('id');
+        $project = Project::where('id', $request->id)->where('user_profile_id', $userProfileId)->first();
         if (!$project) {
             return response()->json(['message' => 'Project not found'], 404);
         }
@@ -343,7 +344,7 @@ public function getJoinRequests(){
     {
         $request->validate(['project_id' => 'required']); 
         
-        $userProfile = Profile::where('user_id',$request->user())->first();
+        $userProfile = Profile::where('user_id', $request->user()->id)->first();
         if(!$userProfile){
             return response()->json(['message' => 'User profile not found'], 404);
         }
@@ -366,7 +367,7 @@ public function getJoinRequests(){
     {
         $request->validate(['project_id' => 'required']);
         
-        $userProfile = Profile::where('user_id', $request->user())->first();
+        $userProfile = Profile::where('user_id', $request->user()->id)->first();
         if(!$userProfile){
             return response()->json(['message' => 'User profile not found'], 404);
         }
@@ -385,30 +386,37 @@ public function getJoinRequests(){
     }
 
         
-
-    public function DeleteMemeber(Request $request){
-        $Memeber_id=$request->id;
-        $id=$request->user()->id;
-        $userinvited=User::where('id', $id)->first();
-        $userProfile =Profile::where('user_id', $userinvited->id)->first();
-        if(!$userProfile){
-            return response()->json(['message' => 'User profile not found'], 404);
-        }
-        $project = Project::where('user_profile_id', $userProfile->id)->first();
-        if(!$project){
-            return response()->json(['message' => 'you donot delete the person'], 404);
-        }
-        $teamleader=TeamMember::where('user_profile_id', $project->user_profile_id)->where('status', 'active')->where('role', "Leader")->first();
-        if($teamleader && $Memeber_id==$teamleader->id){
-            return response()->json(['message' => 'you donot delete the person'], 404);
-        }
-        $teammember=TeamMember::where('id', $Memeber_id)->first();
-        if(!$teammember){
-            return response()->json(['message' => 'User not found'], 404);
-        }
-        $teammember->delete();
-        return response()->json(['message' => 'User deleted successfully'], 200);
+public function DeleteMember(Request $request, $projectId, $memberId){
+    $userProfile = Profile::where('user_id', auth()->id())->first();
+    if (!$userProfile) {
+        return response()->json(['message' => 'User profile not found'], 404);
     }
+
+    $isLeader = TeamMember::where('project_id', $projectId)
+                            ->where('user_profile_id', $userProfile->id)
+                            ->where('role', 'Leader')
+                            ->exists();
+
+    if (!$isLeader) {
+        return response()->json(['message' => 'You are not the leader of this project'], 403);
+    }
+    
+    $teamMember = TeamMember::where('id', $memberId)
+                            ->where('project_id', $projectId)
+                            ->first();
+
+    if (!$teamMember) {
+        return response()->json(['message' => 'Team member not found in this project'], 404);
+    }
+    
+    if ($teamMember->role === 'Leader') {
+         return response()->json(['message' => 'A leader cannot be deleted'], 400);
+    }
+
+    $teamMember->delete();
+    return response()->json(['message' => 'User deleted successfully'], 200);
+}
+
     public function CreateRequirmentofTheProject(Request $request)
     {
         $user_id=$request->user()->id;
