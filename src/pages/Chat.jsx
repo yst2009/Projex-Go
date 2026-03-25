@@ -89,10 +89,12 @@ const Chat = () => {
     };
 
     useEffect(() => {
-        if (selectedUser) {
-            fetchConversation(selectedUser.id);
-        }
-    }, [selectedUser]);
+    if (!selectedUser) return;
+    const interval = setInterval(() => {
+        fetchConversation(selectedUser.id);
+    }, 3000); 
+    return () => clearInterval(interval);
+}, [selectedUser]);;
 
     const fetchConversation = async (otherUserId) => {
         setLoadingChat(true);
@@ -114,7 +116,7 @@ const Chat = () => {
                 content: newMessage
             });
 
-            setMessages([...messages, res.data.message]); 
+            setMessages(prev => [...prev, res.data.message]);
             setNewMessage("");
         } catch (err) { 
             console.error(err); 
@@ -215,7 +217,7 @@ const Chat = () => {
                                         onChange={(e) => setNewMessage(e.target.value)} 
                                         placeholder={`اكتب رسالة لـ ${selectedUser.name}...`} 
                                         className="flex-1"
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                                     />
                                     <Button onClick={handleSend} disabled={!newMessage.trim()} className="bg-blue-600 hover:bg-blue-700 px-6">
                                         <Send className="w-5 h-5" />
