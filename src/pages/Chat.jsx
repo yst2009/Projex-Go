@@ -49,7 +49,7 @@ const NotificationsView = () => {
                         {systemNotifs.map(notif => (
                             <Card key={notif.id} className="border-blue-200 bg-blue-50/50">
                                 <CardContent className="p-4">
-                                    <p className="text-gray-800">{notif.data?.message || "إشعار جديد"}</p>
+                                 <p className="text-gray-800">{notif.data?.body || notif.data?.title || "إشعار جديد"}</p>
                                 </CardContent>
                             </Card>
                         ))}
