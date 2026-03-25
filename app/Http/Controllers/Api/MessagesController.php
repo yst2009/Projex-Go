@@ -27,6 +27,28 @@ class MessagesController extends Controller
             'receiver name' => $user->name,
         ], 201);
     }
+        public function getConversation(Request $request)
+    {
+        $request->validate([
+            'other_user_id' => 'required|exists:users,id'
+        ]);
+
+        $auth_user_id = auth()->id();
+        $other_user_id = $request->other_user_id;
+
+        $messages = messages::where(function ($query) use ($auth_user_id, $other_user_id) {
+            $query->where('sender_id', $auth_user_id)
+                  ->where('receiver_id', $other_user_id);
+        })->orWhere(function ($query) use ($auth_user_id, $other_user_id) {
+            $query->where('sender_id', $other_user_id)
+                  ->where('receiver_id', $auth_user_id);
+        })->orderBy('created_at', 'asc')->get();
+
+        return response()->json([
+            'messages' => $messages
+        ], 200);
+    }
+
     public function showallnotifications()
     {
         $notifications = auth()->user()->notifications()->orderBy('created_at', 'desc')->get();
