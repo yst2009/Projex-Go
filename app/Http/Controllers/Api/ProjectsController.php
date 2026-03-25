@@ -265,49 +265,42 @@ public function destroy($id)
         return response()->json(['message' => 'تم إرسال طلب الانضمام بنجاح'], 200);
     }
 
-public function myInvitations(Request $request)
-{
-    $profile = Profile::where('user_id', auth()->id())->first();
-    if (!$profile) {
-        return response()->json(['message' => 'Profile not found'], 404);
-    }
+    
+public function myInvitations(Request $request) {
+        $profile = Profile::where('user_id', auth()->id())->first();
+        if (!$profile) {
+            return response()->json(['message' => 'Profile not found'], 404);
+        }
 
-    // ✅ تأكد إن الـ user هو Leader من جدول team_members
     $leaderMembership = TeamMember::where('user_profile_id', $profile->id)
         ->where('role', 'Leader')
         ->where('status', 'active')
         ->first();
-// return response()->json([
-//     'profile_id' => $profile->id,
-//     'leader' => $leaderMembership,
-// ]);
     if (!$leaderMembership) {
         return response()->json(['message' => 'You are not a leader of any project'], 404);
     }
 
     $projectId = $leaderMembership->project_id;
 
-    // الـ invitations اللي أنت بعتها ولسه pending
-    $invitations = TeamMember::with(['profile.user'])
-        ->where('project_id', $projectId)
-        ->where('status', 'pending')
-        ->where('type', 'invite')
-        ->get()
-        ->map(function ($inv) {
-            return [
-                'id'             => $inv->id,
-                'user_name'      => $inv->profile->user->name ?? 'Unknown',
-                'requested_role' => $inv->role,
-            ];
-        });
-
-    // الـ requests اللي ناس طلبت تنضم
-    
-
+    $invitations = TeamMember::with(['project']) 
+            ->where('user_profile_id', $profile->id)
+            ->where('status', 'pending')
+            ->where('type', 'invite')
+            ->get()
+            ->map(function ($inv) {
+                return [
+                    'id' => $inv->id,
+                    'project_id' => $inv->project_id,
+                    'project' => $inv->project, 
+                    'role' => $inv->role,
+                ];
+            });
     return response()->json([
-        'invitations' => $invitations,
-    ], 200);
-}   
+            'invitations' => $invitations,
+        ], 200);
+    }
+
+    
 public function getJoinRequests(){
     $profile = Profile::where('user_id', auth()->id())->first();
     if (!$profile) {
